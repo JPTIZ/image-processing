@@ -4,6 +4,7 @@ viewer_inc = include_directories('.')
 
 viewer_lib = library('viewer',
   'window.cpp',
+  'image.cpp',
   include_directories : include_directories('.'),
   dependencies: [sfml, logger],
   install : true)
