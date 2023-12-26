@@ -1,7 +1,3 @@
-#include <iostream>
-
-#include <functional>
-
 #include <logger.h>
 #include <viewer/window.h>
 

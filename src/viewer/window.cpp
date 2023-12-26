@@ -1,7 +1,6 @@
 #include "window.h"
 
 #include <optional>
-#include <iostream>
 
 #include <logger.h>
 
