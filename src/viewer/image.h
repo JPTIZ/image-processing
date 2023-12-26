@@ -13,8 +13,6 @@ public:
 
     Image(int width, int height);
     Image(int width, int height, uint8_t const* data);
-    Image(Image const&) = default;
-    Image(Image&&) = default;
 
     auto data() const -> std::vector<uint8_t> {
         auto raw = _sf_image.getPixelsPtr();

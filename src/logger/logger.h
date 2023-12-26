@@ -46,6 +46,8 @@ inline void debug(std::string_view const& s) {
     if constexpr (MaxLogLevel >= LogLevels::Debug) {
         fmt::print(fmt::fg(fmt::color::dark_green), "[DBG] ");
         fmt::print("{}\n", s);
+    } else {
+        fmt::print("Skipping debug log as {} < {}\n", static_cast<int>(MaxLogLevel), static_cast<int>(LogLevels::Debug));
     }
 }
 

@@ -9,6 +9,19 @@
 
 namespace {
 
+template <typename Container, typename K>
+auto value_or(
+    Container const& c,
+    K const& key,
+    typename Container::mapped_type default_value
+) -> typename Container::mapped_type const {
+    try {
+        return c.at(key);
+    } catch (std::out_of_range const& e) {
+        return default_value;
+    }
+}
+
 sf::RenderWindow make_sf_window(std::string title, int width, int height) {
     auto video_mode = sf::VideoMode{
         static_cast<unsigned>(width),
@@ -89,30 +102,79 @@ void Window::show() {
 }
 
 
-void Window::on_event(sf::Event const& e) {
+void Window::on_event([[maybe_unused]] sf::Event const& e) {
     using tizip::logger::log;
     using tizip::logger::debug;
 
-    auto callbacks = std::unordered_map<sf::Event::EventType, std::function<void(sf::Event const&)>>{
-        {sf::Event::Closed, [this](auto const& _) {
+    static auto current_function = 0;
+
+    auto processing_functions = std::vector<std::tuple<std::string, ProcessingFunction>>{
+        {"No Processing", [](auto i) { return i; }},
+        {"Grayscale", [](Image const& img) {
+            auto original = img.data();
+            auto grayscaled = std::vector<uint8_t>(original.size());
+            for (auto i = 0; i < std::ssize(grayscaled); i += 4) {
+                auto avg = int{original[i]};
+                for (auto sp = 1; sp < 3; ++sp) { // RGB, no A
+                    avg += original[i + sp];
+                }
+                avg = avg / 3;
+                for (auto sp = 0; sp < 3; ++sp) {
+                    grayscaled[i + sp] = avg;
+                }
+                grayscaled[i + 3] = original[i + 3];
+            }
+            return Image(img.width(), img.height(), grayscaled.data());
+        }},
+    };
+
+    auto select_processing_function = [=, this](auto index) {
+        current_function = index % processing_functions.size();
+        auto [name, f] = processing_functions[current_function];
+        set_processing_function(name, f);
+        _sf_texture = make_sf_texture(process(_image));
+        _sf_image.setTexture(_sf_texture);
+    };
+
+    auto previous_processing_function = [=]() {
+        select_processing_function(current_function - 1);
+    };
+
+    auto next_processing_function = [=]() {
+        select_processing_function(current_function + 1);
+    };
+
+    using EventCallback = std::function<void(sf::Event const&)>;
+
+    auto noop = EventCallback{[](auto&&...) {}};
+    auto callbacks = std::unordered_map<sf::Event::EventType, EventCallback>{
+        {sf::Event::Closed, [this](auto const&) {
             log("Closing application...");
             _sf_window.close();
             log("Closed");
         }},
-        {sf::Event::KeyPressed, [this](auto const& e)  {
-            debug(fmt::format("Pressed key {}", e.key.code));
+        {sf::Event::KeyPressed, [=](auto const& e)  {
+            debug(fmt::format("Pressed key {}", static_cast<int>(e.key.code)));
+
+            using KeyPressedCallback = std::function<void()>;
+            auto key_callbacks = std::unordered_map<sf::Keyboard::Key, KeyPressedCallback>{
+                { sf::Keyboard::Left, previous_processing_function },
+                { sf::Keyboard::Right, next_processing_function },
+            };
+
+            auto noop = KeyPressedCallback{[](auto&&...) {}};
+            auto callback = value_or(key_callbacks, e.key.code, noop);
+            callback();
         }},
     };
 
-    if (callbacks.contains(e.type)) {
-        auto callback = callbacks.at(e.type);
-        callback(e);
-    }
+    auto callback = value_or(callbacks, e.type, noop);
+    callback(e);
 }
 
 void Window::set_image(std::filesystem::path const& path) {
-    auto image = load_image(path);
-    _sf_texture = make_sf_texture(image);
+    _image = load_image(path);
+    _sf_texture = make_sf_texture(_image);
     _sf_image.setTexture(_sf_texture);
 
     auto ratio = [](auto v1, auto v2) {
